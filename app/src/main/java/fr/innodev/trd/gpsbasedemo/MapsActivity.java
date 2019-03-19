@@ -1,15 +1,19 @@
 package fr.innodev.trd.gpsbasedemo;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.location.Location;
-import android.os.Build;
-import android.os.Handler;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.widget.TextView;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -22,7 +26,6 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
@@ -32,7 +35,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private FusedLocationProviderClient mFusedLocationClient;
     private LocationRequest mLocationRequest;
     private LocationCallback mLocationCallback;
+    private Location myLastLocation;
+    private SensorManager sensorManager;
+    private int steps = 0;
+    private Sensor sensor;
     private Log log;
+    private int stepCounter = 0;
+    private int stepsSinceStart = 0;
+    private int stepsFromLastPosition = 0;
+    private int stepDetector = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +56,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        sensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -63,6 +77,33 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     }
                 });
 
+        final SensorEventListener sensorEventListener = new SensorEventListener() {
+            @Override
+            public void onSensorChanged(SensorEvent sensorEvent) {
+                switch (sensorEvent.sensor.getStringType()) {
+                    case Sensor.STRING_TYPE_STEP_DETECTOR:
+                        stepDetector++;
+                        break;
+                    case Sensor.STRING_TYPE_STEP_COUNTER:
+                        //Since it will return the total number since we registered we need to subtract the initial amount
+                        //for the current steps since we opened app
+                        if (stepsSinceStart < 1) {
+                            // initial value
+                            stepsSinceStart = (int)sensorEvent.values[0];
+                        }
+
+                        // Calculate steps taken based on first counter value received.
+                        stepCounter = (int)sensorEvent.values[0] - stepsSinceStart;
+                        break;
+                }
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int i) {
+
+            }
+        };
+
         mLocationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
@@ -71,16 +112,34 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     log.v("INFO", "Location Callback" + location.toString());
                     updateMapDisplay(location);
                 }
+
+                if(myLastLocation == null){
+                    sensorManager.registerListener(sensorEventListener, sensor, SensorManager.SENSOR_DELAY_NORMAL);
+                }else{
+                    Log.e("distance", "distance by step : "+(stepCounter-stepsFromLastPosition)*0.6);
+                    Log.e("distance", "distance : "+locationResult.getLastLocation().distanceTo(myLastLocation));
+                    TextView text = (TextView) findViewById(R.id.counter);
+                    text.setText(""+(stepCounter-stepsFromLastPosition));
+                    stepsFromLastPosition = stepCounter;
+                }
+                myLastLocation = locationResult.getLastLocation();
             }
         };
 
         mLocationRequest = LocationRequest.create();
-        mLocationRequest.setInterval(15000);
-        mLocationRequest.setFastestInterval(15000);
+        mLocationRequest.setInterval(20000);
+        mLocationRequest.setFastestInterval(20000);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                 mLocationCallback,
                 null /* Looper */);
+
+
+
+
+
+
+
 
     }
 
