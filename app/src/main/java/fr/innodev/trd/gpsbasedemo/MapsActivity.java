@@ -24,7 +24,10 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnSuccessListener;
 
@@ -44,6 +47,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private int stepsSinceStart = 0;
     private int stepsFromLastPosition = 0;
     private int stepDetector = 0;
+    private Marker myMarker;
+    private Circle myCircle;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,17 +88,19 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 switch (sensorEvent.sensor.getStringType()) {
                     case Sensor.STRING_TYPE_STEP_DETECTOR:
                         stepDetector++;
+                        Log.e("distance", "steps : "+stepDetector);
                         break;
                     case Sensor.STRING_TYPE_STEP_COUNTER:
                         //Since it will return the total number since we registered we need to subtract the initial amount
                         //for the current steps since we opened app
                         if (stepsSinceStart < 1) {
-                            // initial value
                             stepsSinceStart = (int)sensorEvent.values[0];
                         }
 
                         // Calculate steps taken based on first counter value received.
                         stepCounter = (int)sensorEvent.values[0] - stepsSinceStart;
+                        myCircle.setRadius((stepCounter-stepsFromLastPosition)*0.6);
+                        myCircle.setCenter(myMarker.getPosition());
                         break;
                 }
             }
@@ -113,13 +120,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     updateMapDisplay(location);
                 }
 
-                if(myLastLocation == null){
+                    if(myLastLocation == null){
                     sensorManager.registerListener(sensorEventListener, sensor, SensorManager.SENSOR_DELAY_NORMAL);
                 }else{
                     Log.e("distance", "distance by step : "+(stepCounter-stepsFromLastPosition)*0.6);
                     Log.e("distance", "distance : "+locationResult.getLastLocation().distanceTo(myLastLocation));
-                    TextView text = (TextView) findViewById(R.id.counter);
-                    text.setText(""+(stepCounter-stepsFromLastPosition));
+                    TextView steps = (TextView) findViewById(R.id.counter);
+                    TextView distance = (TextView) findViewById(R.id.distance);
+                    steps.setText("steps : "+(stepCounter-stepsFromLastPosition)*0.6);
+                    distance.setText("distance : "+locationResult.getLastLocation().distanceTo(myLastLocation));
+                    myCircle.setCenter(myMarker.getPosition());
+                    myCircle.setRadius(0);
                     stepsFromLastPosition = stepCounter;
                 }
                 myLastLocation = locationResult.getLastLocation();
@@ -127,12 +138,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         };
 
         mLocationRequest = LocationRequest.create();
-        mLocationRequest.setInterval(20000);
-        mLocationRequest.setFastestInterval(20000);
+        mLocationRequest.setInterval(30000);
+        mLocationRequest.setFastestInterval(30000);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                 mLocationCallback,
-                null /* Looper */);
+                null);
 
 
 
@@ -157,14 +168,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+        myMarker = mMap.addMarker(new MarkerOptions().position(new LatLng(0,0)));
+        myCircle = mMap.addCircle(new CircleOptions().radius(0).center(new LatLng(0,0)).strokeColor(ContextCompat.getColor(this, R.color.colorAccent)));
     }
 
     private void updateMapDisplay(Location myLocation) {
-        // Add a marker in Sydney and move the camera
         LatLng curPos = new LatLng(myLocation.getLatitude(), myLocation.getLongitude());
-        mMap.addMarker(new MarkerOptions().position(curPos).title("Position courante"));
+        myMarker.setPosition(curPos);
         float zoom = mMap.getMaxZoomLevel();
-        log.d("INFO", "Zoom Max = " + zoom);
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(curPos, zoom - 3.0f));
     }
 
